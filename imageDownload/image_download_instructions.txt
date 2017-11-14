@@ -1,0 +1,11 @@
+Planet Image Download Instructions:
+
+1) Set API Key as environment variable: https://www.planet.com/docs/api-quickstart-examples/
+2) Create geometry and set route (startpoint, endpoint). Find images that correspond to that route: https://www.planet.com/docs/api-quickstart-examples/step-1-search/
+3) Activate analytic and analaytic_xml assets, and download files by using curl commands: https://www.planet.com/docs/api-quickstart-examples/step-2-download/
+
+#get download linkcurl -L -H "Authorization: api-key $PL_API_KEY" 'https://api.planet.com/data/v1/item-types/REOrthoTile/items/[IMAGE_ID_HERE/assets/' \
+    | jq .[analytic or analytic_xml].location
+#curl direct download link: curl -L [INSERT_DOWNLOAD_LINK] > [DESIRED .tif or .xml file name]
+
+4) Run get_images.py to do this work for you.
