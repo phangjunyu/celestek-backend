@@ -26,7 +26,7 @@ args = vars(ap.parse_args())
 
 
 # load the image, convert it to grayscale, and blur it slightly
-image = cv2.resize(cv2.imread(args["image"]), (800, 400))
+image = cv2.resize(cv2.imread(args["image"]), (900, 350))
 
 im_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
