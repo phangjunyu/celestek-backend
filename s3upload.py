@@ -8,9 +8,9 @@ with open('config.json', 'r') as f:
     config = json.load(f)
 
 
-bucket_name = config.AWS_ACCESS_KEY_ID.lower() + 'space-view'
-conn = boto.connect_s3(config.AWS_ACCESS_KEY_ID,
-        config.AWS_SECRET_ACCESS_KEY)
+bucket_name = 'space-view-test'
+conn = boto.connect_s3(config['AWS_ACCESS_KEY_ID'],
+        config['AWS_SECRET_ACCESS_KEY'])
 
 
 bucket = conn.create_bucket(bucket_name,
