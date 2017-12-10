@@ -15,9 +15,27 @@ import search_endpoint
 from retrying import retry
 from requests.auth import HTTPBasicAuth
 from boto.s3.key import Key
+# from statistics import mean
+# from operator import itemgetter
+# import geopy.distance
 
 if __name__ == '__main__':
 	mainfunction()
+
+# def generate_origin(coordinates):
+# 	mean_long = mean(map(itemgetter(0), coordinates))
+# 	mean_lat = mean(map(itemgetter(1), coordinates))
+# 	return [mean_lat, mean_long]
+#
+#
+# def estimate_longitude_distance(coordinates):
+# 	min_long = min(map(itemgetter(0), coordinates))
+# 	min_lat = min(map(itemgetter(1), coordinates))
+# 	min_point = [min_lat, min_long]
+# 	max_long = max(map(itemgetter(0), coordinates))
+# 	max_lat = max(map(itemgetter(1), coordinates))
+# 	max_point = [max_lat, max_long]
+# 	geopy.distance.vincenty(min_point)
 
 def mainfunction():
 	with open('./config.json', 'r') as f:
@@ -38,13 +56,18 @@ def mainfunction():
 	date = tokens[0] + tokens[1] + tokens[2][:2]
 
 	#find images that correspond to the most recent date and put them and their ids in lists
-	search_endpoint_data = search_endpoint.search_function().json()
+	search_endpoint_data = search_endpoint.search_function()
 	images_to_download = []
-	image_ids_to_download = []
 	for feature in search_endpoint_data["features"]:
 		if (feature["id"][:8] == date):
-			images_to_download.append(feature) #probably do not need
-			image_ids_to_download.append(feature["id"])
+			coordinates = feature['geometry']['coordinates']
+			image = {
+				"id": feature["id"],
+				"coordinates": coordinates
+				# "origin": generate_origin(coordinates),
+				# "width": generate_width_distance(coordinates),
+			}
+			images_to_download.append(image)
 
 	# setup auth
 
@@ -56,25 +79,29 @@ def mainfunction():
 	thread_pool = ThreadPool(parallelism)
 
 	# All items will be sent to the `activate_item` function but only 5 will be running at once
-	thread_pool.map(activate_item, image_ids_to_download)
+	thread_pool.map(activate_item, images_to_download)
 
 	AWS_ACCESS_KEY_ID = config['AWS_ACCESS_KEY_ID']
 	AWS_SECRET_ACCESS_KEY = config['AWS_SECRET_ACCESS_KEY']
 
 	conn = boto.connect_s3(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
 	bucket_name = config['AWS_BUCKET']
+	bucket = conn.get_bucket(bucket_name)
 	#bucket = conn.create_bucket(bucket_name,
 	    #location=boto.s3.connection.Location.DEFAULT)
 
-	for item_id in tqdm(image_ids_to_download):
-		print(item_id)
-		download_and_upload_image(item_id, conn, bucket_name)
+	# for image in tqdm(images_to_download):
+	# 	item_id = image['id']
+	# 	print(item_id)
+	# 	download_and_upload_image(image, bucket)
+	return images_to_download
 
 @retry(
     wait_exponential_multiplier=1000,
     wait_exponential_max=10000)
 
-def activate_item(item_id):
+def activate_item(image):
+	item_id = image['id']
 	print("attempting to activate: " + item_id)
 	session = requests.Session()
 	session.auth = (os.environ['$PL_API_KEY'], '')
@@ -101,7 +128,8 @@ def activate_item(item_id):
 			raise Exception("rate limit error")
 		print("activation succeeeded for item " + item_id)
 
-def download_and_upload_image(item_id, conn, bucket_name):
+def download_and_upload_image(image, bucket):
+	item_id = image['id']
 	item_type = "PSScene4Band"
 	asset_types = ["analytic", "analytic_xml"]
 	for asset_type in asset_types:
@@ -110,14 +138,19 @@ def download_and_upload_image(item_id, conn, bucket_name):
 		result = requests.get(item_url, auth=HTTPBasicAuth(os.environ['$PL_API_KEY'], ''))
 		download_url = result.json()[asset_type]['location']
 		if (asset_type == 'analytic') :
-			output_file = item_id + '_tif'
+			output_file = item_id + '.tif'
 		elif (asset_type == 'analytic_xml'):
-			output_file = item_id + '_xml'
-		#urllib.request.urlretrieve(download_url, output_file)
-		bucket = conn.get_bucket(bucket_name)
+			output_file = item_id + '.xml'
+		#download
+		file_object = urllib.request.urlopen(download_url)
+		# processed_img = object_size.draw_boxes(file_object.read())
+		# fp = io.BytesIO(processed_img)
+		fp = io.BytesIO(file_object.read())
+		#upload
 		k = Key(bucket)
 		k.key = output_file
-		file_object = urllib.request.urlopen(download_url)
-		fp = io.BytesIO(file_object.read())
 		k.set_contents_from_file(fp)
+		upload_image(file, k)
+		url = k.generate_url(3600)
+		image['link'] = url
 		print(item_id,item_type, "uploaded")

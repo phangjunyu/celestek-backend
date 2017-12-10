@@ -1,6 +1,7 @@
-from flask import Flask, request, make_response, jsonify
+from flask import Flask, request, make_response, jsonify, Response
 from datetime import datetime, timedelta
 from time import strftime
+import json
 
 
 app = Flask(__name__)
@@ -29,7 +30,6 @@ def downloadAndUploadImagesToS3():
 def superfunction():
 
 	data = request.get_json()
-	print(data)
 	coordinates = data['nameValuePairs']['coordinates']
 	for i, point in enumerate(coordinates):
 		coordinates[i] = list(reversed(coordinates[i]))
@@ -40,9 +40,10 @@ def superfunction():
 	filterClass.set_geometry_filter()
 	filterClass.set_main_filter()
 	import get_images
-	get_images.mainfunction()
-	return "SUCCESS"
-
+	images = get_images.mainfunction()
+	print(images)
+	json_images = Response(json.dumps(images),  mimetype='application/json')
+	return make_response(json_images,200)
 
 
 if __name__ == '__main__':

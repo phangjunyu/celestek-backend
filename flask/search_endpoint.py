@@ -20,4 +20,4 @@ def search_function():
 	    'https://api.planet.com/data/v1/quick-search',
 	    auth=HTTPBasicAuth(os.environ['$PL_API_KEY'], ''),
 	    json=search_endpoint_request)
-	return result
+	return result.json()	
