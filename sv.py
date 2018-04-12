@@ -7,7 +7,7 @@ import argparse
 import imutils
 import cv2
 
-# python sv.py --image patches.png --width 0.995 --lb 190 --ub 255
+# python sv.py --image sv_test.png --width 0.995 --lb 190 --ub 255
 
 def midpoint(ptA, ptB):
 	return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)

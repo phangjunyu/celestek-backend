@@ -2,7 +2,7 @@ import rasterio
 import numpy
 import cv2
 
-image_file = "20171030_181215_1003_3B_AnalyticMS.tif"
+image_file = "20180312_181743_101e.tif"
 orig = cv2.imread(image_file,1)
 cv2.imwrite("original.png", orig)
 
@@ -16,7 +16,7 @@ with rasterio.open(image_file) as src:
 
 from xml.dom import minidom
 
-xmldoc = minidom.parse("20171030_181215_1003_3B_AnalyticMS_metadata.xml")
+xmldoc = minidom.parse("20180312_181743_101e.xml")
 nodes = xmldoc.getElementsByTagName("ps:bandSpecificMetadata")
 
 # XML parser refers to bands by numbers 1-4
