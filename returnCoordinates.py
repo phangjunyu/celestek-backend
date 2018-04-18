@@ -6,8 +6,21 @@ import numpy as np
 import argparse
 import imutils
 import cv2
+import shapely.geometry
+import pyproj
+from lxml import etree
 
-# python sv.py --image joined.jpg --width 0.995 --lb 190 --ub 255
+IMAGE_WIDTH = 900
+IMAGE_HEIGHT = 350
+XML_TAG = '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}epsgCode'
+XML_COORD_TAGS = [
+'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topLeft',
+'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topRight',
+'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomLeft',
+'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomRight'
+]
+
+# python sv.py --image joined.jpg --xml original_xml.xml --width 0.995 --lb 190 --ub 255
 
 def midpoint(ptA, ptB):
 	return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
@@ -16,6 +29,8 @@ def midpoint(ptA, ptB):
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True,
 	help="path to the input image")
+ap.add_argument("-x", "--xml", required=True,
+	help="path to the xml file")
 ap.add_argument("-w", "--width", type=float, required=True,
 	help="width of the left-most object in the image (in inches)")
 ap.add_argument("-lb", "--lb", type=float, required=True,
@@ -25,8 +40,20 @@ ap.add_argument("-ub", "--ub", type=float, required=True,
 args = vars(ap.parse_args())
 
 
+#load the xml
+xml_coordinates = []
+for _,v in etree.iterparse(args["xml"]):
+	if v.tag in x:
+        lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
+        long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
+        xml_coordinates.append((lat, long))
+    elif v.tag == XML_TAG:
+        current_epsg = "epsg:"+v.text
+
+
 # load the image, convert it to grayscale, and blur it slightly
-image = cv2.resize(cv2.imread(args["image"]), (900, 350))
+# Also defines pixel coordinate limits of image 900 for x and 350 for y
+image = cv2.resize(cv2.imread(args["image"]), (IMAGE_WIDTH, IMAGE_HEIGHT))
 
 im_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
@@ -64,7 +91,17 @@ cnts = cnts[0] if imutils.is_cv2() else cnts[1]
 # 'pixels per metric' calibration variable
 (cnts, _) = contours.sort_contours(cnts)
 pixelsPerMetric = None
-# original = cv2.imread("original.tif")
+# original = cv2.imread("original.tif"
+
+#set the projection types
+p1 = pyproj.Proj(init=current_epsg)
+# 3857 is metric system
+p2 = pyproj.Proj(init="epsg:3857")
+transformed_coordinates = []
+#use only NW and SE coords
+for i in range(len(xml_coordinates)):
+	transformed_coordinates.append(pyproj.transform(p1, p2, xml_coordinates[i][0], xml_coordinates[i][1]))
+
 # loop over the contours individually
 for c in cnts:
 	# if the contour is not sufficiently large, ignore it
@@ -82,17 +119,12 @@ for c in cnts:
 	# order, then draw the outline of the rotated bounding
 	# box
 	box = perspective.order_points(box)
-	cv2.drawContours(orig, [box.astype("int")], -1, (0, 255, 0), 2)
-
-	# loop over the original points and draw them
-	for (x, y) in box:
-		cv2.circle(orig, (int(x), int(y)), 5, (0, 0, 255), -1)
 
 	# unpack the ordered bounding box, then compute the midpoint
 	# between the top-left and top-right coordinates, followed by
 	# the midpoint between bottom-left and bottom-right coordinates
 	(tl, tr, br, bl) = box
-	print("coordinates are:", box)
+
 	(tltrX, tltrY) = midpoint(tl, tr)
 	(blbrX, blbrY) = midpoint(bl, br)
 
@@ -116,26 +148,3 @@ for c in cnts:
 	# compute the Euclidean distance between the midpoints
 	dA = dist.euclidean((tltrX, tltrY), (blbrX, blbrY))
 	dB = dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
-
-	# if the pixels per metric has not been initialized, then
-	# compute it as the ratio of pixels to supplied metric
-	# (in this case, inches)
-	if pixelsPerMetric is None:
-		pixelsPerMetric = dB / args["width"]
-
-	# compute the size of the object
-	dimA = dA / pixelsPerMetric
-	dimB = dB / pixelsPerMetric
-
-	# draw the object sizes on the image
-	cv2.putText(orig, "{:.1f}miles".format(dimA),
-		(int(tltrX - 15), int(tltrY - 10)), cv2.FONT_HERSHEY_SIMPLEX,
-		0.65, (255, 255, 255), 2)
-	cv2.putText(orig, "{:.1f}miles".format(dimB),
-		(int(trbrX + 10), int(trbrY)), cv2.FONT_HERSHEY_SIMPLEX,
-		0.65, (255, 255, 255), 2)
-
-	# show the output image
-	cv2.imshow("Image", orig)
-	cv2.imshow("Mask", im_fill)
-	cv2.waitKey(0)
