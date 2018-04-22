@@ -8,10 +8,14 @@ import imutils
 import cv2
 import shapely.geometry
 import pyproj
+import math
 from lxml import etree
+import requests
 
+#image is resized to 900x350
 IMAGE_WIDTH = 900
 IMAGE_HEIGHT = 350
+#XML TAGS found in the XML document
 XML_TAG = '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}epsgCode'
 XML_COORD_TAGS = [
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topLeft',
@@ -20,10 +24,7 @@ XML_COORD_TAGS = [
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomRight'
 ]
 
-# python sv.py --image joined.jpg --xml original_xml.xml --width 0.995 --lb 190 --ub 255
-
-def midpoint(ptA, ptB):
-	return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
+# python returnCoordinates.py --image joined.jpg --xml test_xml.xml --width 0.995 --lb 190 --ub 255
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -40,15 +41,15 @@ ap.add_argument("-ub", "--ub", type=float, required=True,
 args = vars(ap.parse_args())
 
 
-#load the xml
+#loads and extracts the relevant coordinates from the xml document
 xml_coordinates = []
 for _,v in etree.iterparse(args["xml"]):
-	if v.tag in x:
-        lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
-        long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
-        xml_coordinates.append((lat, long))
-    elif v.tag == XML_TAG:
-        current_epsg = "epsg:"+v.text
+	if v.tag in XML_COORD_TAGS:
+		lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
+		long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
+		xml_coordinates.append((lat, long))
+	elif v.tag == XML_TAG:
+		current_epsg = "epsg:"+v.text
 
 
 # load the image, convert it to grayscale, and blur it slightly
@@ -97,12 +98,23 @@ pixelsPerMetric = None
 p1 = pyproj.Proj(init=current_epsg)
 # 3857 is metric system
 p2 = pyproj.Proj(init="epsg:3857")
-transformed_coordinates = []
-#use only NW and SE coords
-for i in range(len(xml_coordinates)):
-	transformed_coordinates.append(pyproj.transform(p1, p2, xml_coordinates[i][0], xml_coordinates[i][1]))
 
+changed = []
+#in order topleft, topright, bottomright, bottomleft
+#converts all the coordinates extracted from projection 1 to projection 2
+for i in xml_coordinates:
+    changed.append((pyproj.transform(p1, p2, i[0], i[1])))
+
+#get width and height based on hypotenuse
+width = math.sqrt(math.pow(changed[0][0]-changed[1][0], 2) + math.pow(changed[0][1] - changed[1][1], 2))
+height = math.sqrt(math.pow(changed[1][0]-changed[2][0], 2) + math.pow(changed[1][1] - changed[2][1], 2))
+#converting the width and height previously gotten to the reference distances of 900 and 350
+width_ = width/IMAGE_WIDTH
+height_ = height/IMAGE_HEIGHT
+#reference every point from topLeft
+topLeft = changed[0]
 # loop over the contours individually
+final_boxes = []
 for c in cnts:
 	# if the contour is not sufficiently large, ignore it
 	if cv2.contourArea(c) < 1000:
@@ -123,28 +135,18 @@ for c in cnts:
 	# unpack the ordered bounding box, then compute the midpoint
 	# between the top-left and top-right coordinates, followed by
 	# the midpoint between bottom-left and bottom-right coordinates
+	final_box = []
 	(tl, tr, br, bl) = box
 
-	(tltrX, tltrY) = midpoint(tl, tr)
-	(blbrX, blbrY) = midpoint(bl, br)
+	for coordinate in box:
+		final_box.append((coordinate[0] * width_ + topLeft[0], coordinate[1] * height_ + topLeft[1]))
 
-	# compute the midpoint between the top-left and top-right points,
-	# followed by the midpoint between the top-righ and bottom-right
-	(tlblX, tlblY) = midpoint(tl, bl)
-	(trbrX, trbrY) = midpoint(tr, br)
+	final_boxes.append(final_box)
 
-	# draw the midpoints on the image
-	cv2.circle(orig, (int(tltrX), int(tltrY)), 5, (255, 0, 0), -1)
-	cv2.circle(orig, (int(blbrX), int(blbrY)), 5, (255, 0, 0), -1)
-	cv2.circle(orig, (int(tlblX), int(tlblY)), 5, (255, 0, 0), -1)
-	cv2.circle(orig, (int(trbrX), int(trbrY)), 5, (255, 0, 0), -1)
-
-	# draw lines between the midpoints
-	cv2.line(orig, (int(tltrX), int(tltrY)), (int(blbrX), int(blbrY)),
-		(255, 0, 255), 2)
-	cv2.line(orig, (int(tlblX), int(tlblY)), (int(trbrX), int(trbrY)),
-		(255, 0, 255), 2)
-
-	# compute the Euclidean distance between the midpoints
-	dA = dist.euclidean((tltrX, tltrY), (blbrX, blbrY))
-	dB = dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
+#transform everything back into projection 1
+transformed_boxes = []
+for box in final_boxes:
+	transformed_box = []
+	for point in box:
+		transformed_box.append(pyproj.transform(p2, p1, point[0], point[1]))
+	transformed_boxes.append(transformed_box)

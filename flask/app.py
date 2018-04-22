@@ -26,6 +26,12 @@ def downloadAndUploadImagesToS3():
     else:
 	    return make_response("GET SPACEVIEW", 200)
 
+@app.route('/returnCoordinates', methods=['GET'])
+def getCoordinates():
+	import returnCoordinates
+	coordinates = returnCoordinates()
+	print(coordinates)
+
 @app.route('/getImageURLs/', methods=['POST'])
 def superfunction():
 

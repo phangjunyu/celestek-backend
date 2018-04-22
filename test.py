@@ -1,5 +1,6 @@
 from lxml import etree
 import pyproj
+import math
 
 x = [
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topLeft',
@@ -8,7 +9,7 @@ x = [
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomRight'
 ]
 xml_coordinates = []
-for _,v in etree.iterparse("20180312_181743_101e.xml"):
+for _,v in etree.iterparse("test_xml.xml"):
     if v.tag in x:
         lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
         long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
@@ -22,7 +23,14 @@ p1 = pyproj.Proj(init="epsg:"+current_epsg)
 p2 = pyproj.Proj(init="epsg:3857")
 
 changed = []
-for i in range(0, 4, 2):
-    changed.append(pyproj.transform(p1, p2, xml_coordinates[i][0], xml_coordinates[i][1]))
+#in order topleft, topright, bottomright, bottomleft
+for i in xml_coordinates:
+    changed.append((pyproj.transform(p1, p2, i[0], i[1])))
 
-print("height is", abs(changed[0][1] - changed[1][1]), "width is", abs(changed[0][0] - changed[1][0]))
+length = math.sqrt(math.pow(changed[0][0]-changed[1][0], 2) + math.pow(changed[0][1] - changed[1][1], 2))
+height = math.sqrt(math.pow(changed[1][0]-changed[2][0], 2) + math.pow(changed[1][1] - changed[2][1], 2))
+
+STANDARD_LENGTH = 900
+STANDARD_HEIGHT = 350
+print(changed)
+print("length is", length, "height is", height)
