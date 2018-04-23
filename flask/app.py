@@ -29,8 +29,8 @@ def downloadAndUploadImagesToS3():
 @app.route('/returnCoordinates', methods=['GET'])
 def getCoordinates():
 	import returnCoordinates
-	coordinates = returnCoordinates()
-	print(coordinates)
+	json_boxes = json.dumps(returnCoordinates.mainfunction())
+	return json_boxes
 
 @app.route('/getImageURLs/', methods=['POST'])
 def superfunction():

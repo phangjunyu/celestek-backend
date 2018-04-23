@@ -18,8 +18,9 @@ XML_TAG = '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected
 XML_COORD_TAGS = [
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topLeft',
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topRight',
-'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomLeft',
-'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomRight'
+'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomRight',
+'{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}bottomLeft'
+
 ]
 
 IMAGE_ARG = "joined.jpg"
@@ -29,20 +30,9 @@ LB_ARG = 190
 UB_ARG = 255
 
 if __name__ == '__main__':
-	coordinates = getCoordinates()
+	mainfunction()
 
-def getCoordinates():
-	#load the xml
-	xml_coordinates = []
-	for _,v in etree.iterparse(XML_ARG):
-		if v.tag in XML_COORD_TAGS:
-			lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
-			long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
-			xml_coordinates.append((lat, long))
-		elif v.tag == XML_TAG:
-			current_epsg = "epsg:"+v.text
-
-
+def mainfunction():
 	# load the image, convert it to grayscale, and blur it slightly
 	# Also defines pixel coordinate limits of image 900 for x and 350 for y
 	image = cv2.resize(cv2.imread(IMAGE_ARG), (IMAGE_WIDTH, IMAGE_HEIGHT))
@@ -84,24 +74,22 @@ def getCoordinates():
 	(cnts, _) = contours.sort_contours(cnts)
 	pixelsPerMetric = None
 	# original = cv2.imread("original.tif"
-
-	#set the projection types
-	p1 = pyproj.Proj(init=current_epsg)
-	# 3857 is metric system
-	p2 = pyproj.Proj(init="epsg:3857")
-
-	changed = []
-	#in order topleft, topright, bottomright, bottomleft
-	for i in xml_coordinates:
-	    changed.append((pyproj.transform(p1, p2, i[0], i[1])))
-
-	width = math.sqrt(math.pow(changed[0][0]-changed[1][0], 2) + math.pow(changed[0][1] - changed[1][1], 2))
-	height = math.sqrt(math.pow(changed[1][0]-changed[2][0], 2) + math.pow(changed[1][1] - changed[2][1], 2))
+	
+	#load the xml
+	xml_coordinates = []
+	for _,v in etree.iterparse(XML_ARG):
+		if v.tag in XML_COORD_TAGS:
+			lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
+			long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
+			xml_coordinates.append((lat, long))
+	# WHAT IF VALUES HAVE DIFFERENT SIGNS
+	height = abs(xml_coordinates[0][0]-xml_coordinates[3][0])
+	width = abs(xml_coordinates[0][1]-xml_coordinates[1][1])
 
 	width_ = width/IMAGE_WIDTH
 	height_ = height/IMAGE_HEIGHT
 
-	topLeft = changed[0]
+	topLeft = xml_coordinates[0]
 	# loop over the contours individually
 	final_boxes = []
 	for c in cnts:
@@ -127,7 +115,7 @@ def getCoordinates():
 		final_box = []
 		(tl, tr, br, bl) = box
 		for coordinate in box:
-			final_box.append((coordinate[0] * width_ + topLeft[0], coordinate[1] * height_ + topLeft[1]))
+			final_box.append((topLeft[0]-coordinate[1] * height_, coordinate[0] * width_ + topLeft[1]))
 
 		final_boxes.append(final_box)
 
@@ -135,7 +123,9 @@ def getCoordinates():
 	for box in final_boxes:
 		transformed_box = []
 		for point in box:
-			transformed_box.append(pyproj.transform(p2, p1, point[0], point[1]))
+			# tb = pyproj.transform(p2, p1, point[0], point[1])
+			tb = [point[0].tolist(), point[1].tolist()]
+			transformed_box.append({'lat': tb[0], 'lng': tb[1]})
 		transformed_boxes.append(transformed_box)
 
-	return transformed_boxes
+	return {'final_boxes': transformed_boxes}
