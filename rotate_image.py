@@ -2,7 +2,6 @@ import math
 import cv2
 import numpy as np
 
-
 def rotate_image(image, angle):
     """
     Rotates an OpenCV 2 / NumPy image about it's centre by the given angle
@@ -128,8 +127,9 @@ def crop_around_center(image, width, height):
     x2 = int(image_center[0] + 0)
     y1 = int(image_center[1] - 0)
     y2 = int(image_center[1] + 0)
-
-    return image[y1:y2, x1:x2]
+    result = image[y1:y2, x1:x2]
+    cv2.imwrite('final_image.png', result)
+    return result
 
 def remove_border():
     #https://stackoverflow.com/questions/13538748/crop-black-edges-with-opencv?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
@@ -150,21 +150,8 @@ def remove_border():
     return img[y:y+h,x:x+w]
 
 def rotate_function():
-    """
-    Demos the largest_rotated_rect function
-    """
-
-    image = cv2.imread("joined.jpg")
+    image = cv2.imread("ndvi_cmap.png")
     image_height, image_width = image.shape[0:2]
-
-    cv2.imshow("Original Image", image)
-
-    print("Press [enter] to begin the demo")
-    print("Press [q] or Escape to quit")
-
-    key = cv2.waitKey(0)
-    if key == ord("q") or key == 27:
-        exit()
 
     image_orig = np.copy(image)
     image_rotated = rotate_image(image, -13.5)
@@ -177,18 +164,6 @@ def rotate_function():
             math.radians(-13.5)
         )
     )
-
-    key = cv2.waitKey(2)
-    if(key == ord("q") or key == 27):
-        exit()
-
-    cv2.imshow("Borderless Image", image_borderless)
-    cv2.imshow("Original Image", image_orig)
-    cv2.imshow("Rotated Image", image_rotated)
-    #cv2.imshow("Cropped Image", image_rotated_cropped)
-
-    print("Done")
-
 
 if __name__ == "__main__":
     rotate_function()

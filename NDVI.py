@@ -4,7 +4,7 @@ import cv2
 
 image_file = "20180312_181743_101e.tif"
 orig = cv2.imread(image_file,1)
-cv2.imwrite("original.png", orig)
+# cv2.imwrite("original.png", orig)
 
 
 # Load red and NIR bands - note all PlanetScope 4-band images have band order BGRN
