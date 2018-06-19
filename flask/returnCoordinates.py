@@ -8,15 +8,14 @@ import imutils
 import cv2
 import shapely.geometry
 import pyproj
+import os
 import math
 from lxml import etree
 import requests
 
-NUM_HEIGHT = 5
-NUM_WIDTH = 10
+NUM_HEIGHT = 11
+NUM_WIDTH = 12
 
-IMAGE_WIDTH = 900
-IMAGE_HEIGHT = 350
 XML_TAG = '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}epsgCode'
 XML_COORD_TAGS = [
 '{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}topLeft',
@@ -27,32 +26,33 @@ XML_COORD_TAGS = [
 ]
 
 path = "C:\\Users\\phangjunyu\\Desktop\\spaceview\\Backend\\image_slices"
-XML_ARG = "20180312_181743_101e.xml"
-WIDTH_ARG = 0.995
-LB_ARG = 190
+XML_ARG = "C:\\Users\\phangjunyu\\Desktop\\spaceview\\Backend\\20180312_181743_101e.xml"
+LB_ARG = 195
 UB_ARG = 255
+#load the xml
+xml_coordinates = []
+for _,v in etree.iterparse(XML_ARG):
+	if v.tag in XML_COORD_TAGS:
+		lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
+		long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
+		xml_coordinates.append((lat, long))
 
 if __name__ == '__main__':
-	#load the xml
-	xml_coordinates = []
-	for _,v in etree.iterparse(XML_ARG):
-		if v.tag in XML_COORD_TAGS:
-			lat = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}latitude').text)
-			long = float(v.find('{http://schemas.planet.com/ps/v1/planet_product_metadata_geocorrected_level}longitude').text)
-			xml_coordinates.append((lat, long))
+	mainfunction()
 
-	mainfunction(xml_coordinates)
-
-def mainfunction(xml_coordinates):
+def mainfunction(startandend=None):
 	# there should be 50 images? 10 length cuts and 5 breadth cuts
 	topLeft = xml_coordinates[0]
 	height = abs(xml_coordinates[0][0]-xml_coordinates[3][0])
 	width = abs(xml_coordinates[0][1]-xml_coordinates[1][1])
 	transformed_boxes = []
-	for index, image in enumerate(os.listdir(path)):
+	#TODO: CHANGE THIS
+	for index, image_slice in enumerate(os.listdir(path)):
 		# load the image, convert it to grayscale, and blur it slightly
 		# Also defines pixel coordinate limits of image 900 for x and 350 for y
-		image = cv2.resize(cv2.imread(IMAGE_ARG), (IMAGE_WIDTH, IMAGE_HEIGHT))
+		# image = cv2.resize(cv2.imread(image_slice), (IMAGE_WIDTH, IMAGE_HEIGHT))
+		image = cv2.imread(path+"\\"+image_slice)
+		IMAGE_HEIGHT, IMAGE_WIDTH = image.shape[0:2]
 
 		im_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
@@ -66,7 +66,7 @@ def mainfunction(xml_coordinates):
 
 		thresh = 0;
 
-		im_fill = cv2.threshold(im_mask, thresh, 255, cv2.THRESH_BINARY)[1];
+		im_fill = cv2.threshold(im_mask, thresh, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1];
 
 		_,contour,hier = cv2.findContours(im_fill,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_SIMPLE)
 
@@ -85,11 +85,9 @@ def mainfunction(xml_coordinates):
 		cnts = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL,
 			cv2.CHAIN_APPROX_SIMPLE)
 		cnts = cnts[0] if imutils.is_cv2() else cnts[1]
-
-		# sort the contours from left-to-right and initialize the
-		# 'pixels per metric' calibration variable
+		if len(cnts) == 0:
+			continue
 		(cnts, _) = contours.sort_contours(cnts)
-		pixelsPerMetric = None
 
 		width_ = width/NUM_WIDTH
 		height_ = height/NUM_HEIGHT
@@ -118,10 +116,12 @@ def mainfunction(xml_coordinates):
 			# the midpoint between bottom-left and bottom-right coordinates
 			final_box = []
 			(tl, tr, br, bl) = box
-			h = int(index/10)
-			w = index%10
+			h = int(index/NUM_HEIGHT)
+			w = index%NUM_WIDTH
 			for coordinate in box:
-				final_box.append((topLeft[0] - (height_ * h) + coordinate[1]/IMAGE_HEIGHT*height_, topLeft[1] - (width_ * w) + coordinate[0]/IMAGE_WIDTH*width_))
+				final_coordinate = (topLeft[0] - ((height_ * h) + coordinate[1]/IMAGE_HEIGHT*height_), topLeft[1] + ((width_ * w) + coordinate[0]/IMAGE_WIDTH*width_))
+
+				final_box.append(final_coordinate)
 
 			#TODO: if box outside of bounding range filter out?
 			final_boxes.append(final_box)

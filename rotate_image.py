@@ -1,76 +1,28 @@
 import math
 import cv2
 import numpy as np
+from scipy import ndimage
 
-def rotate_image(image, angle):
-    """
-    Rotates an OpenCV 2 / NumPy image about it's centre by the given angle
-    (in degrees). The returned image will be large enough to hold the entire
-    new image, with a black background
-    """
+def rotate_image():
+    img_before = cv2.imread('ndvi_cmap.png')
 
-    # Get the image size
-    # No that's not an error - NumPy stores image matricies backwards
-    image_size = (image.shape[1], image.shape[0])
-    image_center = tuple(np.array(image_size) / 2)
+    img_gray = cv2.cvtColor(img_before, cv2.COLOR_BGR2GRAY)
+    img_edges = cv2.Canny(img_gray, 100, 100, apertureSize=3)
+    lines = cv2.HoughLinesP(img_edges, 1, math.pi / 180.0, 100, minLineLength=100, maxLineGap=5)
 
-    # Convert the OpenCV 3x2 rotation matrix to 3x3
-    rot_mat = np.vstack(
-        [cv2.getRotationMatrix2D(image_center, angle, 1.0), [0, 0, 1]]
-    )
+    angles = []
 
-    rot_mat_notranslate = np.matrix(rot_mat[0:2, 0:2])
+    for x1, y1, x2, y2 in lines[0]:
+        cv2.line(img_before, (x1, y1), (x2, y2), (255, 0, 0), 3)
+        angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
+        angles.append(angle)
 
-    # Shorthand for below calcs
-    image_w2 = image_size[0] * 0.5
-    image_h2 = image_size[1] * 0.5
+    median_angle = np.median(angles)
+    img_rotated = ndimage.rotate(img_before, median_angle)
+    print("Angle is", median_angle)
+    final_rotated = ndimage.rotate(img_rotated, 90)
 
-    # Obtain the rotated coordinates of the image corners
-    rotated_coords = [
-        (np.array([-image_w2,  image_h2]) * rot_mat_notranslate).A[0],
-        (np.array([ image_w2,  image_h2]) * rot_mat_notranslate).A[0],
-        (np.array([-image_w2, -image_h2]) * rot_mat_notranslate).A[0],
-        (np.array([ image_w2, -image_h2]) * rot_mat_notranslate).A[0]
-    ]
-
-    # Find the size of the new image
-    x_coords = [pt[0] for pt in rotated_coords]
-    x_pos = [x for x in x_coords if x > 0]
-    x_neg = [x for x in x_coords if x < 0]
-
-    y_coords = [pt[1] for pt in rotated_coords]
-    y_pos = [y for y in y_coords if y > 0]
-    y_neg = [y for y in y_coords if y < 0]
-
-    right_bound = max(x_pos)
-    left_bound = min(x_neg)
-    top_bound = max(y_pos)
-    bot_bound = min(y_neg)
-
-    new_w = int(abs(right_bound - left_bound))
-    new_h = int(abs(top_bound - bot_bound))
-
-    # We require a translation matrix to keep the image centred
-    trans_mat = np.matrix([
-        [1, 0, int(new_w * 0.5 - image_w2)],
-        [0, 1, int(new_h * 0.5 - image_h2)],
-        [0, 0, 1]
-    ])
-
-    # Compute the tranform for the combined rotation and translation
-    affine_mat = (np.matrix(trans_mat) * np.matrix(rot_mat))[0:2, :]
-
-    # Apply the transform
-    result = cv2.warpAffine(
-        image,
-        affine_mat,
-        (new_w, new_h),
-        flags=cv2.INTER_LINEAR
-    )
-
-    cv2.imwrite('cropped_image.png', result)
-    return result
-
+    cv2.imwrite('rotated.jpg', final_rotated)
 
 def largest_rotated_rect(w, h, angle):
     """
@@ -108,7 +60,7 @@ def largest_rotated_rect(w, h, angle):
     )
 
 
-def crop_around_center(image, width, height):
+def crop_around_center():
     """
     Given a NumPy / OpenCV 2 image, crops it to the given width and height,
     around it's centre point
@@ -137,33 +89,26 @@ def remove_border():
     Given a NumPy / OpenCV 2 image, crops it to the given width and height,
     around it's centre point
     """
-
-    img = cv2.imread('cropped_image.png')
-    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    _,thresh = cv2.threshold(gray,1,255,cv2.THRESH_BINARY)
-
+    img = cv2.imread('rotated.jpg')
+    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    COLOR_MIN = np.array([0, 0, 50],np.uint8)
+    COLOR_MAX = np.array([255, 255, 255],np.uint8)
+    frame_threshed = cv2.inRange(hsv_img, COLOR_MIN, COLOR_MAX)
+    imgray = frame_threshed
+    ret,thresh = cv2.threshold(frame_threshed,0,255,0)
     _, contours, _= cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    #contours,hierarchy = cv2.findContours(thresh,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-    cnt = contours[0]
+    #contours, hierarchy = cv2.findContours(thresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+
+    # Find the index of the largest contour
+    areas = [cv2.contourArea(c) for c in contours]
+    max_index = np.argmax(areas)
+    cnt=contours[max_index]
+
     x,y,w,h = cv2.boundingRect(cnt)
-
-    return img[y:y+h,x:x+w]
-
-def rotate_function():
-    image = cv2.imread("ndvi_cmap.png")
-    image_height, image_width = image.shape[0:2]
-
-    image_orig = np.copy(image)
-    image_rotated = rotate_image(image, -13.5)
-    image_borderless = remove_border()
-    image_rotated_cropped = crop_around_center(
-        image_rotated,
-        *largest_rotated_rect(
-            image_width,
-            image_height,
-            math.radians(-13.5)
-        )
-    )
+    #cv2.rectangle(im,(x,y),(x+w,y+h),(0,255,0),2)
+    result = img[y:y+h,x:x+w]
+    cv2.imwrite('final_image.jpg', result)
 
 if __name__ == "__main__":
-    rotate_function()
+    # rotate_image()
+    remove_border()

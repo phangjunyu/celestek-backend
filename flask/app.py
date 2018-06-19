@@ -2,6 +2,7 @@ from flask import Flask, request, make_response, jsonify, Response
 from datetime import datetime, timedelta
 from time import strftime
 import json
+import ast
 
 
 app = Flask(__name__)
@@ -28,8 +29,17 @@ def downloadAndUploadImagesToS3():
 
 @app.route('/returnCoordinates', methods=['GET'])
 def getCoordinates():
+	# s = request.form.get('startpoint')
+	# e = request.form.get('startpoint')
+	# startandend = None
+	# if not (s == "" and e == ""):
+	# 	startpoint = ast.literal_eval(s)
+	# 	endpoint = ast.literal_eval(e)
+	# 	start = {"lat": startpoint[0], "lng": startpoint[1]}
+	# 	end = {"lat": endpoint[0], "lng": endpoint[1]}
+	# 	startandend = [start, end]
 	import returnCoordinates
-	json_boxes = json.dumps(returnCoordinates.mainfunction())
+	json_boxes = json.dumps(returnCoordinates.mainfunction(None))
 	return json_boxes
 
 @app.route('/getImageURLs/', methods=['POST'])

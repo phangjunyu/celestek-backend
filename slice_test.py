@@ -2,7 +2,7 @@ import image_slicer
 from PIL import ImageDraw, ImageFont
 
 
-tiles = image_slicer.slice('ndvi_cmap.png', 50, save=False)
+tiles = image_slicer.slice('final_image.jpg', 130, save=False)
 
 # for tile in tiles:
     # overlay = ImageDraw.Draw(tile.image)
